@@ -29,6 +29,8 @@ use {mio::net::UnixStream, std::path::PathBuf};
 // This rate limits the join rate of the bots
 // Increasing it will cause the bots to join more quickly
 const AVG_JOINS_PER_TICK: f64 = 5.0;
+// Vanilla servers commonly kick clients that chat too frequently.
+const CHAT_INTERVAL_TICKS: u32 = 100; // Five seconds at 20 ticks per second.
 
 const SHOULD_MOVE: bool = true;
 
@@ -354,7 +356,7 @@ pub fn start_bots(
 
                 if (tick_counter + bot.id) % action_tick == 0 {
                     match rand::thread_rng().gen_range(0..=4u8) {
-                        0 => {
+                        0 if (tick_counter + bot.id) % CHAT_INTERVAL_TICKS == 0 => {
                             // Send chat
                             bot.send_packet(
                                 play::write_chat_message(
