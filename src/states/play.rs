@@ -70,10 +70,8 @@ pub fn process_teleport(buffer: &mut Buf, bot: &mut Bot, compression: &mut Compr
                 write_chat_message(&format!("/register {AUTH_PASSWORD} {AUTH_PASSWORD}")),
                 compression,
             );
-            bot.send_packet(
-                write_chat_message(&format!("/login {AUTH_PASSWORD}")),
-                compression,
-            );
+            bot.auth_login_at = Some(std::time::Instant::now() + std::time::Duration::from_secs(1));
+            println!("{} sent /register", bot.name);
             bot.auth_sent = true;
         }
     }

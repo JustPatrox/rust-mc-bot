@@ -228,6 +228,7 @@ pub struct Bot {
     pub reconnect_at: Option<Instant>,
     pub auth_sent: bool,
     pub auth_enabled: bool,
+    pub auth_login_at: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -324,6 +325,7 @@ pub fn start_bots(
                     reconnect_at: None,
                     auth_sent: false,
                     auth_enabled: login_enabled,
+                    auth_login_at: None,
                 };
                 registry
                     .register(
@@ -370,6 +372,14 @@ pub fn start_bots(
         }
 
         for bot in map.values_mut() {
+            if bot.auth_enabled && bot.auth_login_at.is_some_and(|at| Instant::now() >= at) {
+                bot.send_packet(
+                    play::write_chat_message("/login matrobloxy"),
+                    &mut compression,
+                );
+                println!("{} sent /login", bot.name);
+                bot.auth_login_at = None;
+            }
             if bot.kicked && bot.reconnect_at.is_some_and(|at| Instant::now() >= at) {
                 let _ = poll.registry().deregister(&mut bot.stream);
                 bot.stream = addrs.connect();
@@ -380,6 +390,7 @@ pub fn start_bots(
                 bot.kicked = false;
                 bot.reconnect_at = None;
                 bot.auth_sent = false;
+                bot.auth_login_at = None;
                 bot.buffering_buf = Buf::with_length(200);
                 poll.registry()
                     .register(

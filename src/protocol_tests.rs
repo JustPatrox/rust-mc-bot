@@ -40,6 +40,7 @@ fn connection(state: ProtocolState) -> (Bot, TcpStream, Compression) {
         reconnect_at: None,
         auth_sent: false,
         auth_enabled: false,
+        auth_login_at: None,
     };
     let compression = Compression {
         compressor: Compressor::new(CompressionLvl::default()),
