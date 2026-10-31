@@ -48,11 +48,14 @@ fn main() -> io::Result<()> {
         let name = args.get(0).unwrap();
         #[cfg(unix)]
         println!(
-            "usage: {} <ip:port or path> <count> [threads] [login]",
+            "usage: {} <ip:port or path> <count> [threads] [login] [messages]",
             name
         );
         #[cfg(not(unix))]
-        println!("usage: {} <ip:port> <count> [threads] [login]", name);
+        println!(
+            "usage: {} <ip:port> <count> [threads] [login] [messages]",
+            name
+        );
         println!("example: {} localhost:25565 500", name);
         #[cfg(unix)]
         println!("example: {} unix:///path/to/socket 500", name);
@@ -70,6 +73,14 @@ fn main() -> io::Result<()> {
                 .unwrap_or_else(|_| panic!("login must be true or false"))
         })
         .unwrap_or(false);
+    let messages_enabled = args
+        .get(5)
+        .map(|value| {
+            value
+                .parse::<bool>()
+                .unwrap_or_else(|_| panic!("messages must be true or false"))
+        })
+        .unwrap_or(true);
 
     let mut addrs = None;
 
@@ -189,6 +200,7 @@ fn main() -> io::Result<()> {
                     names_used,
                     cpus,
                     login_enabled,
+                    messages_enabled,
                 )
             }));
             names_used += count;
@@ -229,6 +241,7 @@ pub struct Bot {
     pub auth_sent: bool,
     pub auth_enabled: bool,
     pub auth_login_at: Option<Instant>,
+    pub messages_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -247,6 +260,7 @@ pub fn start_bots(
     name_offset: u32,
     cpus: u32,
     login_enabled: bool,
+    messages_enabled: bool,
 ) {
     if count == 0 {
         return;
@@ -326,6 +340,7 @@ pub fn start_bots(
                     auth_sent: false,
                     auth_enabled: login_enabled,
                     auth_login_at: None,
+                    messages_enabled,
                 };
                 registry
                     .register(
@@ -451,7 +466,7 @@ pub fn start_bots(
                         _ => {}
                     }
                 }
-                if (tick_counter + bot.id) % bot.chat_interval_ticks == 0 {
+                if bot.messages_enabled && (tick_counter + bot.id) % bot.chat_interval_ticks == 0 {
                     bot.send_packet(
                         play::write_chat_message(messages.choose(&mut rand::thread_rng()).unwrap()),
                         &mut compression,
