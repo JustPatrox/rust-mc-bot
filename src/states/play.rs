@@ -65,15 +65,17 @@ pub fn process_teleport(buffer: &mut Buf, bot: &mut Bot, compression: &mut Compr
         let mut loaded = Buf::new();
         loaded.write_packet_id(protocol::PLAY_LOADED); // Player Loaded
         bot.send_packet(loaded, compression);
-        bot.send_packet(
-            write_chat_message(&format!("/register {AUTH_PASSWORD} {AUTH_PASSWORD}")),
-            compression,
-        );
-        bot.send_packet(
-            write_chat_message(&format!("/login {AUTH_PASSWORD}")),
-            compression,
-        );
-        bot.auth_sent = true;
+        if bot.auth_enabled {
+            bot.send_packet(
+                write_chat_message(&format!("/register {AUTH_PASSWORD} {AUTH_PASSWORD}")),
+                compression,
+            );
+            bot.send_packet(
+                write_chat_message(&format!("/login {AUTH_PASSWORD}")),
+                compression,
+            );
+            bot.auth_sent = true;
+        }
     }
     bot.teleported = true;
     println!("{x}, {y}, {z}");

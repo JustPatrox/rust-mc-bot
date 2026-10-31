@@ -47,9 +47,12 @@ fn main() -> io::Result<()> {
     if args.len() < 3 {
         let name = args.get(0).unwrap();
         #[cfg(unix)]
-        println!("usage: {} <ip:port or path> <count> [threads]", name);
+        println!(
+            "usage: {} <ip:port or path> <count> [threads] [login]",
+            name
+        );
         #[cfg(not(unix))]
-        println!("usage: {} <ip:port> <count> [threads]", name);
+        println!("usage: {} <ip:port> <count> [threads] [login]", name);
         println!("example: {} localhost:25565 500", name);
         #[cfg(unix)]
         println!("example: {} unix:///path/to/socket 500", name);
@@ -59,6 +62,14 @@ fn main() -> io::Result<()> {
     let arg1 = args.get(1).unwrap();
     let arg2 = args.get(2).unwrap();
     let arg3 = args.get(3);
+    let login_enabled = args
+        .get(4)
+        .map(|value| {
+            value
+                .parse::<bool>()
+                .unwrap_or_else(|_| panic!("login must be true or false"))
+        })
+        .unwrap_or(false);
 
     let mut addrs = None;
 
@@ -170,7 +181,15 @@ fn main() -> io::Result<()> {
             let usernames = usernames.clone();
             let messages = messages.clone();
             threads.push(std::thread::spawn(move || {
-                start_bots(count, addrs, usernames, messages, names_used, cpus)
+                start_bots(
+                    count,
+                    addrs,
+                    usernames,
+                    messages,
+                    names_used,
+                    cpus,
+                    login_enabled,
+                )
             }));
             names_used += count;
         }
@@ -208,6 +227,7 @@ pub struct Bot {
     pub chat_interval_ticks: u32,
     pub reconnect_at: Option<Instant>,
     pub auth_sent: bool,
+    pub auth_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -225,6 +245,7 @@ pub fn start_bots(
     messages: Arc<Vec<String>>,
     name_offset: u32,
     cpus: u32,
+    login_enabled: bool,
 ) {
     if count == 0 {
         return;
@@ -302,6 +323,7 @@ pub fn start_bots(
                     chat_interval_ticks: CHAT_INTERVAL_TICKS,
                     reconnect_at: None,
                     auth_sent: false,
+                    auth_enabled: login_enabled,
                 };
                 registry
                     .register(
