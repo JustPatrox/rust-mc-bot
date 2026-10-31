@@ -36,6 +36,8 @@ fn connection(state: ProtocolState) -> (Bot, TcpStream, Compression) {
         pitch: 0.0,
         buffering_buf: Buf::new(),
         joined: true,
+        chat_interval_ticks: 20,
+        reconnect_at: None,
     };
     let compression = Compression {
         compressor: Compressor::new(CompressionLvl::default()),

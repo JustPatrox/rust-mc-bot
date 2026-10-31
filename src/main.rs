@@ -204,6 +204,8 @@ pub struct Bot {
     pub pitch: f32,
     pub buffering_buf: Buf,
     pub joined: bool,
+    pub chat_interval_ticks: u32,
+    pub reconnect_at: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -266,7 +268,7 @@ pub fn start_bots(
     let mut tick_counter = 0;
     let action_tick = 4;
 
-    'main: loop {
+    loop {
         let ins = Instant::now();
 
         if bots_joined < count {
@@ -295,6 +297,8 @@ pub fn start_bots(
                     pitch: 0.0,
                     buffering_buf: Buf::with_length(200),
                     joined: false,
+                    chat_interval_ticks: CHAT_INTERVAL_TICKS,
+                    reconnect_at: None,
                 };
                 registry
                     .register(
@@ -327,13 +331,9 @@ pub fn start_bots(
                         &mut compression,
                     );
                     if bot.kicked {
-                        println!("{} disconnected", bot.name);
-                        let token = bot.token;
-                        map.remove(&token).expect("kicked bot doesn't exist");
-
-                        if map.is_empty() {
-                            break 'main;
-                        }
+                        println!("{} disconnected; reconnecting in 5 seconds", bot.name);
+                        bot.chat_interval_ticks = bot.chat_interval_ticks.saturating_add(20);
+                        bot.reconnect_at = Some(Instant::now() + Duration::from_secs(5));
                     }
                 }
             }
@@ -344,10 +344,30 @@ pub fn start_bots(
             std::thread::sleep(dur - elapsed);
         }
 
-        let mut to_remove = Vec::new();
+        for bot in map.values_mut() {
+            if bot.kicked && bot.reconnect_at.is_some_and(|at| Instant::now() >= at) {
+                let _ = poll.registry().deregister(&mut bot.stream);
+                bot.stream = addrs.connect();
+                bot.state = ProtocolState::Login;
+                bot.compression_threshold = 0;
+                bot.teleported = false;
+                bot.joined = false;
+                bot.kicked = false;
+                bot.reconnect_at = None;
+                bot.buffering_buf = Buf::with_length(200);
+                poll.registry()
+                    .register(
+                        &mut bot.stream,
+                        bot.token,
+                        Interest::READABLE | Interest::WRITABLE,
+                    )
+                    .expect("could not register reconnect");
+                println!("reconnecting bot \"{}\"", bot.name);
+            }
+        }
 
         for bot in map.values_mut() {
-            if SHOULD_MOVE && bot.teleported {
+            if SHOULD_MOVE && bot.teleported && !bot.kicked {
                 bot.x += rand::random::<f64>() * 1.0 - 0.5;
                 bot.z += rand::random::<f64>() * 1.0 - 0.5;
                 bot.send_packet(play::write_current_pos(bot), &mut compression);
@@ -394,7 +414,7 @@ pub fn start_bots(
                         _ => {}
                     }
                 }
-                if (tick_counter + bot.id) % CHAT_INTERVAL_TICKS == 0 {
+                if (tick_counter + bot.id) % bot.chat_interval_ticks == 0 {
                     bot.send_packet(
                         play::write_chat_message(messages.choose(&mut rand::thread_rng()).unwrap()),
                         &mut compression,
@@ -404,14 +424,6 @@ pub fn start_bots(
                     bot.send_packet(play::write_tick_end(), &mut compression);
                 }
             }
-
-            if bot.kicked {
-                to_remove.push(bot.token);
-            }
-        }
-
-        for bot in to_remove {
-            let _ = map.remove(&bot);
         }
 
         tick_counter += 1;
