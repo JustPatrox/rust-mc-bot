@@ -1,6 +1,7 @@
 use libdeflater::Compressor;
 
 use crate::packet_utils::Buf;
+use crate::protocol;
 use crate::states::{config, login, play, status};
 use crate::{Bot, Compression, Error, ProtocolState};
 
@@ -10,7 +11,7 @@ pub struct PacketFramer {}
 
 pub struct PacketCompressor {}
 
-pub fn lookup_packet(state: ProtocolState, packet: u8) -> Option<PacketHandler> {
+pub fn lookup_packet(state: ProtocolState, packet: u32) -> Option<PacketHandler> {
     match state {
         ProtocolState::Login => match packet {
             0x00 => return Some(play::process_kick),
@@ -35,18 +36,19 @@ pub fn lookup_packet(state: ProtocolState, packet: u8) -> Option<PacketHandler> 
             0x04 => return Some(config::process_keep_alive_packet),
             0x05 => return Some(config::process_ping),
             0x09 => return Some(config::process_resource_pack),
-            0x0B => return Some(config::process_transfer),
-            0x0E => return Some(config::process_known_packs),
+            protocol::CONFIG_TRANSFER => return Some(config::process_transfer),
+            protocol::CONFIG_KNOWN_PACKS => return Some(config::process_known_packs),
+            protocol::CONFIG_CODE_OF_CONDUCT => return Some(config::process_code_of_conduct),
             _ => {}
         },
 
         ProtocolState::Play => match packet {
-            0x15 => return Some(config::process_cookie_request_packet),
-            0x26 => return Some(play::process_keep_alive_packet),
-            0x2B => return Some(play::process_join_game),
-            0x1C => return Some(play::process_kick),
-            0x41 => return Some(play::process_teleport),
-            0x7A => return Some(config::process_transfer),
+            protocol::PLAY_COOKIE_REQUEST => return Some(play::process_cookie_request_packet),
+            protocol::PLAY_KEEP_ALIVE => return Some(play::process_keep_alive_packet),
+            protocol::PLAY_LOGIN => return Some(play::process_join_game),
+            protocol::PLAY_DISCONNECT => return Some(play::process_kick),
+            protocol::PLAY_POSITION => return Some(play::process_teleport),
+            protocol::PLAY_TRANSFER => return Some(config::process_transfer),
             _ => {}
         },
     }
@@ -58,7 +60,7 @@ pub fn process_decode(
     bot: &mut Bot,
     compression: &mut Compression,
 ) -> Option<()> {
-    let packet_id = buffer.read_var_u32().0 as u8;
+    let packet_id = buffer.read_var_u32().0;
     (lookup_packet(bot.state, packet_id)?)(buffer, bot, compression);
     Some(())
 }

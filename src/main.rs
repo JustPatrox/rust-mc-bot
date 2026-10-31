@@ -1,7 +1,11 @@
 mod net;
 mod packet_processors;
 mod packet_utils;
+mod protocol;
 mod states;
+
+#[cfg(test)]
+mod protocol_tests;
 
 use crate::packet_utils::Buf;
 use crate::states::login;
@@ -14,6 +18,7 @@ use std::collections::HashMap;
 use std::io;
 use std::io::{Read, Write};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{env, net::ToSocketAddrs};
 use uuid::Uuid;
@@ -30,7 +35,7 @@ const MESSAGES: &[&str] = &["This is a chat message!", "Wow", "Server = on?"];
 
 #[cfg(unix)]
 const UDS_PREFIX: &str = "unix://";
-const PROTOCOL_VERSION: u32 = 772;
+use protocol::PROTOCOL_VERSION;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 
@@ -80,6 +85,27 @@ fn main() -> io::Result<()> {
     // Cant be none because it would have panicked earlier
     let addrs = addrs.unwrap();
 
+    let username_pool = Arc::new(
+        std::fs::read_to_string("usernames.txt")
+            .map_err(|error| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("could not read usernames.txt: {error}"),
+                )
+            })?
+            .lines()
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>(),
+    );
+    if username_pool.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "usernames.txt is empty",
+        ));
+    }
+
     let count: u32 = arg2
         .parse()
         .unwrap_or_else(|_| panic!("{} is not a number", arg2));
@@ -93,10 +119,27 @@ fn main() -> io::Result<()> {
 
     println!("cpus: {}", cpus);
 
+    let mut repetition_counts = HashMap::<String, u32>::new();
+    let mut rng = rand::thread_rng();
+    let usernames = Arc::new(
+        (0..count)
+            .map(|_| {
+                let base = username_pool.choose(&mut rng).unwrap().clone();
+                let repetition = repetition_counts.entry(base.clone()).or_insert(0);
+                let name = if *repetition == 0 {
+                    base
+                } else {
+                    format!("{}_{}", base, repetition)
+                };
+                *repetition += 1;
+                name
+            })
+            .collect::<Vec<_>>(),
+    );
+
     let count_per_thread = count / cpus;
     let mut extra = count % cpus;
     let mut names_used = 0;
-
     if count > 0 {
         let mut threads = Vec::new();
         for _ in 0..cpus {
@@ -108,10 +151,10 @@ fn main() -> io::Result<()> {
             }
 
             let addrs = addrs.clone();
+            let usernames = usernames.clone();
             threads.push(std::thread::spawn(move || {
-                start_bots(count, addrs, names_used, cpus)
+                start_bots(count, addrs, usernames, names_used, cpus)
             }));
-
             names_used += count;
         }
 
@@ -137,9 +180,12 @@ pub struct Bot {
     pub state: ProtocolState,
     pub kicked: bool,
     pub teleported: bool,
+    pub input_flags: u8,
     pub x: f64,
     pub y: f64,
     pub z: f64,
+    pub yaw: f32,
+    pub pitch: f32,
     pub buffering_buf: Buf,
     pub joined: bool,
 }
@@ -152,7 +198,13 @@ pub enum ProtocolState {
     Play,
 }
 
-pub fn start_bots(count: u32, addrs: Address, name_offset: u32, cpus: u32) {
+pub fn start_bots(
+    count: u32,
+    addrs: Address,
+    usernames: Arc<Vec<String>>,
+    name_offset: u32,
+    cpus: u32,
+) {
     if count == 0 {
         return;
     }
@@ -206,7 +258,7 @@ pub fn start_bots(count: u32, addrs: Address, name_offset: u32, cpus: u32) {
             let registry = poll.registry();
             for bot in bots_joined..(bots_this_tick as u32 + bots_joined).min(count) {
                 let token = Token(bot as usize);
-                let name = "Bot_".to_owned() + &(name_offset + bot).to_string();
+                let name = usernames[(name_offset + bot) as usize].clone();
 
                 let mut bot = Bot {
                     token,
@@ -218,9 +270,12 @@ pub fn start_bots(count: u32, addrs: Address, name_offset: u32, cpus: u32) {
                     state: ProtocolState::Login,
                     kicked: false,
                     teleported: false,
+                    input_flags: 0,
                     x: 0.0,
                     y: 0.0,
                     z: 0.0,
+                    yaw: 0.0,
+                    pitch: 0.0,
                     buffering_buf: Buf::with_length(200),
                     joined: false,
                 };
@@ -279,6 +334,8 @@ pub fn start_bots(count: u32, addrs: Address, name_offset: u32, cpus: u32) {
                 bot.x += rand::random::<f64>() * 1.0 - 0.5;
                 bot.z += rand::random::<f64>() * 1.0 - 0.5;
                 bot.send_packet(play::write_current_pos(bot), &mut compression);
+                bot.yaw = 0.0;
+                bot.pitch = 0.0;
 
                 if (tick_counter + bot.id) % action_tick == 0 {
                     match rand::thread_rng().gen_range(0..=4u8) {
@@ -300,12 +357,10 @@ pub fn start_bots(count: u32, addrs: Address, name_offset: u32, cpus: u32) {
                         }
                         2 => {
                             // Sneak
+                            bot.input_flags =
+                                (bot.input_flags & !0x20) | if rand::random() { 0x20 } else { 0 };
                             bot.send_packet(
-                                play::write_entity_action(
-                                    bot.entity_id,
-                                    if rand::random() { 1 } else { 0 },
-                                    0,
-                                ),
+                                play::write_player_input(bot.input_flags),
                                 &mut compression,
                             );
                         }
@@ -314,7 +369,7 @@ pub fn start_bots(count: u32, addrs: Address, name_offset: u32, cpus: u32) {
                             bot.send_packet(
                                 play::write_entity_action(
                                     bot.entity_id,
-                                    if rand::random() { 3 } else { 4 },
+                                    if rand::random() { 1 } else { 2 },
                                     0,
                                 ),
                                 &mut compression,
@@ -329,6 +384,9 @@ pub fn start_bots(count: u32, addrs: Address, name_offset: u32, cpus: u32) {
                         }
                         _ => {}
                     }
+                }
+                if !protocol::IS_26_2 {
+                    bot.send_packet(play::write_tick_end(), &mut compression);
                 }
             }
 

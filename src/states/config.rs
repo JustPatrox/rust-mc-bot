@@ -154,3 +154,10 @@ pub fn write_client_settings() -> Buf {
 
     buf
 }
+
+/// Accept the configuration code of conduct so unattended bots can finish login.
+pub fn process_code_of_conduct(_buffer: &mut Buf, bot: &mut Bot, compression: &mut Compression) {
+    let mut buf = Buf::new();
+    buf.write_packet_id(0x09);
+    bot.send_packet(buf, compression);
+}
