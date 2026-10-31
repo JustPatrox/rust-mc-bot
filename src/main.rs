@@ -420,7 +420,7 @@ pub fn start_bots(
                         &mut compression,
                     );
                 }
-                if !protocol::IS_26_2 {
+                if !protocol::IS_26_2 || protocol::IS_1_21_11 {
                     bot.send_packet(play::write_tick_end(), &mut compression);
                 }
             }

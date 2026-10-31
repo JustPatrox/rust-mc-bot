@@ -12,6 +12,7 @@ debug = 2
 [features]
 # By default build for Minecraft Java 26.3; opt into 26.2 at compile time.
 mc-26-2 = []
+mc-1-21-11 = []
 
 [dependencies]
 mio = { version = "1.0", features = ["os-poll", "net"] }

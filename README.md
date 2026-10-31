@@ -14,7 +14,7 @@ When I was working on the [Minestom Project](https://github.com/Minestom/Minesto
       git checkout tags/1.18.1
       ```
 2. Compile the code
-    - This port targets **Minecraft Java 26.3** (protocol 777) by default. For **26.2** (protocol 776), build with `cargo build --release --features mc-26-2` instead. Choose the matching build for your server; version selection happens at compile time and the command-line arguments are unchanged.
+    - This port targets **Minecraft Java 26.3** (protocol 777) by default. For **26.2** (protocol 776), build with `cargo build --release --features mc-26-2`; for **1.21.11** (protocol 774), use `cargo build --release --features mc-1-21-11`. Choose the matching build for your server; version selection happens at compile time and the command-line arguments are unchanged.
     - Make sure Rust is installed. See [here](https://rustup.rs).
     - ```bash
       cargo build --release

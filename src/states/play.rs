@@ -28,12 +28,18 @@ pub fn process_teleport(buffer: &mut Buf, bot: &mut Bot, compression: &mut Compr
     let x = buffer.read_f64();
     let y = buffer.read_f64();
     let z = buffer.read_f64();
-    let _delta_x = buffer.read_f64();
-    let _delta_y = buffer.read_f64();
-    let _delta_z = buffer.read_f64();
+    if !protocol::IS_1_21_11 {
+        let _delta_x = buffer.read_f64();
+        let _delta_y = buffer.read_f64();
+        let _delta_z = buffer.read_f64();
+    }
     let yaw = buffer.read_f32();
     let pitch = buffer.read_f32();
-    let flags = buffer.read_u32();
+    let flags = if protocol::IS_1_21_11 {
+        buffer.read_byte() as u32
+    } else {
+        buffer.read_u32()
+    };
     if flags & 0b00001 == 0 {
         bot.x = x;
     } else {
@@ -57,7 +63,7 @@ pub fn process_teleport(buffer: &mut Buf, bot: &mut Bot, compression: &mut Compr
     );
     if !bot.teleported {
         let mut loaded = Buf::new();
-        loaded.write_packet_id(0x2C); // Player Loaded
+        loaded.write_packet_id(protocol::PLAY_LOADED); // Player Loaded
         bot.send_packet(loaded, compression);
     }
     bot.teleported = true;
@@ -69,7 +75,7 @@ pub fn process_teleport(buffer: &mut Buf, bot: &mut Bot, compression: &mut Compr
 pub fn write_chat_message(message: &str) -> Buf {
     // ClientChatMessagePacket
     let mut buf = Buf::new();
-    buf.write_packet_id(0x09);
+    buf.write_packet_id(if protocol::IS_1_21_11 { 0x08 } else { 0x09 });
 
     buf.write_sized_str(message);
 
@@ -96,7 +102,7 @@ pub fn write_animation(off_hand: bool) -> Buf {
     let mut buf = Buf::new();
     buf.write_packet_id(protocol::PLAY_ANIMATION);
     // 26.3 replaced Swing Arm with the empty Punch packet.
-    if protocol::IS_26_2 {
+    if protocol::IS_26_2 || protocol::IS_1_21_11 {
         buf.write_var_u32(if off_hand { 1 } else { 0 });
     }
 
@@ -108,7 +114,7 @@ pub fn write_animation(off_hand: bool) -> Buf {
 pub fn write_entity_action(entity_id: u32, action_id: u32, jump_boost: u32) -> Buf {
     // ClientEntityActionPacket
     let mut buf = Buf::new();
-    buf.write_packet_id(0x2A);
+    buf.write_packet_id(protocol::PLAY_ENTITY_ACTION);
 
     buf.write_var_u32(entity_id);
     buf.write_var_u32(action_id);
@@ -137,7 +143,7 @@ pub fn write_tele_confirm(id: u32, x: f64, y: f64, z: f64, yaw: f32, pitch: f32)
     buf.write_packet_id(0x00);
 
     buf.write_var_u32(id);
-    if !protocol::IS_26_2 {
+    if !protocol::IS_26_2 && !protocol::IS_1_21_11 {
         buf.write_f64(x);
         buf.write_f64(y);
         buf.write_f64(z);
@@ -153,7 +159,7 @@ pub fn write_tele_confirm(id: u32, x: f64, y: f64, z: f64, yaw: f32, pitch: f32)
 pub fn write_keep_alive_packet(id: u64) -> Buf {
     // ClientKeepAlivePacket
     let mut buf = Buf::new();
-    buf.write_packet_id(0x1C);
+    buf.write_packet_id(protocol::PLAY_KEEP_ALIVE_SERVERBOUND);
 
     buf.write_u64(id);
 
@@ -169,7 +175,7 @@ pub fn write_current_pos(bot: &Bot) -> Buf {
 pub fn write_pos(x: f64, y: f64, z: f64, yaw: f32, pitch: f32) -> Buf {
     // ClientPlayerPositionAndRotationPacket
     let mut buf = Buf::new();
-    buf.write_packet_id(0x1F);
+    buf.write_packet_id(protocol::PLAY_POSITION_SERVERBOUND);
 
     buf.write_f64(x);
     buf.write_f64(y);
@@ -186,7 +192,7 @@ pub fn write_pos(x: f64, y: f64, z: f64, yaw: f32, pitch: f32) -> Buf {
 /// Player Input: shift is bit 5, sprint is bit 6.
 pub fn write_player_input(flags: u8) -> Buf {
     let mut buf = Buf::new();
-    buf.write_packet_id(0x2B);
+    buf.write_packet_id(protocol::PLAY_INPUT);
     buf.write_u8(flags);
     buf
 }
@@ -208,6 +214,6 @@ pub fn process_cookie_request_packet(
 /// 26.3 permits one position update per client tick, delimited by this packet.
 pub fn write_tick_end() -> Buf {
     let mut buf = Buf::new();
-    buf.write_packet_id(0x0D);
+    buf.write_packet_id(protocol::PLAY_TICK_END);
     buf
 }
