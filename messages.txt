@@ -1,0 +1,5 @@
+Hola, servidor!
+Probando Minecraft 26.2
+Bot listo
+Todo funciona
+Mensaje de prueba

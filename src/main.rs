@@ -31,7 +31,6 @@ use {mio::net::UnixStream, std::path::PathBuf};
 const AVG_JOINS_PER_TICK: f64 = 5.0;
 
 const SHOULD_MOVE: bool = true;
-const MESSAGES: &[&str] = &["This is a chat message!", "Wow", "Server = on?"];
 
 #[cfg(unix)]
 const UDS_PREFIX: &str = "unix://";
@@ -105,6 +104,20 @@ fn main() -> io::Result<()> {
             "usernames.txt is empty",
         ));
     }
+    let messages = Arc::new(
+        std::fs::read_to_string("messages.txt")?
+            .lines()
+            .map(str::trim)
+            .filter(|message| !message.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>(),
+    );
+    if messages.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "messages.txt is empty",
+        ));
+    }
 
     let count: u32 = arg2
         .parse()
@@ -152,8 +165,9 @@ fn main() -> io::Result<()> {
 
             let addrs = addrs.clone();
             let usernames = usernames.clone();
+            let messages = messages.clone();
             threads.push(std::thread::spawn(move || {
-                start_bots(count, addrs, usernames, names_used, cpus)
+                start_bots(count, addrs, usernames, messages, names_used, cpus)
             }));
             names_used += count;
         }
@@ -202,6 +216,7 @@ pub fn start_bots(
     count: u32,
     addrs: Address,
     usernames: Arc<Vec<String>>,
+    messages: Arc<Vec<String>>,
     name_offset: u32,
     cpus: u32,
 ) {
@@ -343,7 +358,7 @@ pub fn start_bots(
                             // Send chat
                             bot.send_packet(
                                 play::write_chat_message(
-                                    MESSAGES.choose(&mut rand::thread_rng()).unwrap(),
+                                    messages.choose(&mut rand::thread_rng()).unwrap(),
                                 ),
                                 &mut compression,
                             );

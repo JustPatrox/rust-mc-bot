@@ -21,7 +21,7 @@ When I was working on the [Minestom Project](https://github.com/Minestom/Minesto
       ```
     - Executable will be built to `target/release/rust-mc-bot` (linux/macos) or `target/release/rust-mc-bot.exe` (Windows)
 3. Start the bots
-    - Keep `usernames.txt` in the current directory when launching the program. Each bot receives a random username from that file; names are no longer generated as `Bot_0`, `Bot_1`, etc. If a base name repeats, the first stays unchanged and later uses receive `_1`, `_2`, and so on. The requested bot count is still the `<count>` argument.
+    - Keep `usernames.txt` and `messages.txt` in the current directory when launching the program. Each bot receives a random username from `usernames.txt`; repeated names receive `_1`, `_2`, and so on. Chat messages are selected randomly from `messages.txt`, one message per line.
     - Usage:
       ```bash
       ./rust-mc-bot <ip:port or path> <count> [threads]
