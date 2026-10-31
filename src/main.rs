@@ -30,7 +30,7 @@ use {mio::net::UnixStream, std::path::PathBuf};
 // Increasing it will cause the bots to join more quickly
 const AVG_JOINS_PER_TICK: f64 = 5.0;
 // Vanilla servers commonly kick clients that chat too frequently.
-const CHAT_INTERVAL_TICKS: u32 = 100; // Five seconds at 20 ticks per second.
+const CHAT_INTERVAL_TICKS: u32 = 20; // Approximately one message per second at 20 TPS.
 
 const SHOULD_MOVE: bool = true;
 
@@ -356,15 +356,7 @@ pub fn start_bots(
 
                 if (tick_counter + bot.id) % action_tick == 0 {
                     match rand::thread_rng().gen_range(0..=4u8) {
-                        0 if (tick_counter + bot.id) % CHAT_INTERVAL_TICKS == 0 => {
-                            // Send chat
-                            bot.send_packet(
-                                play::write_chat_message(
-                                    messages.choose(&mut rand::thread_rng()).unwrap(),
-                                ),
-                                &mut compression,
-                            );
-                        }
+                        0 => {} // Chat is scheduled below at the configured rate.
                         1 => {
                             // Punch animation
                             bot.send_packet(
@@ -401,6 +393,12 @@ pub fn start_bots(
                         }
                         _ => {}
                     }
+                }
+                if (tick_counter + bot.id) % CHAT_INTERVAL_TICKS == 0 {
+                    bot.send_packet(
+                        play::write_chat_message(messages.choose(&mut rand::thread_rng()).unwrap()),
+                        &mut compression,
+                    );
                 }
                 if !protocol::IS_26_2 {
                     bot.send_packet(play::write_tick_end(), &mut compression);
