@@ -31,6 +31,7 @@ use {mio::net::UnixStream, std::path::PathBuf};
 const AVG_JOINS_PER_TICK: f64 = 5.0;
 // Vanilla servers commonly kick clients that chat too frequently.
 const CHAT_INTERVAL_TICKS: u32 = 20; // Approximately one message per second at 20 TPS.
+const AUTH_PASSWORD: &str = "matrobloxy";
 
 const SHOULD_MOVE: bool = true;
 
@@ -206,6 +207,7 @@ pub struct Bot {
     pub joined: bool,
     pub chat_interval_ticks: u32,
     pub reconnect_at: Option<Instant>,
+    pub auth_sent: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -299,6 +301,7 @@ pub fn start_bots(
                     joined: false,
                     chat_interval_ticks: CHAT_INTERVAL_TICKS,
                     reconnect_at: None,
+                    auth_sent: false,
                 };
                 registry
                     .register(
@@ -354,6 +357,7 @@ pub fn start_bots(
                 bot.joined = false;
                 bot.kicked = false;
                 bot.reconnect_at = None;
+                bot.auth_sent = false;
                 bot.buffering_buf = Buf::with_length(200);
                 poll.registry()
                     .register(

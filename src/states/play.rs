@@ -1,6 +1,6 @@
 use crate::packet_utils::Buf;
 use crate::protocol;
-use crate::{Bot, Compression};
+use crate::{Bot, Compression, AUTH_PASSWORD};
 
 /// Clientbound Keep Alive (play)
 /// https://minecraft.wiki/w/Java_Edition_protocol/Packets#Clientbound_Keep_Alive_(play)
@@ -65,6 +65,15 @@ pub fn process_teleport(buffer: &mut Buf, bot: &mut Bot, compression: &mut Compr
         let mut loaded = Buf::new();
         loaded.write_packet_id(protocol::PLAY_LOADED); // Player Loaded
         bot.send_packet(loaded, compression);
+        bot.send_packet(
+            write_chat_message(&format!("/register {AUTH_PASSWORD} {AUTH_PASSWORD}")),
+            compression,
+        );
+        bot.send_packet(
+            write_chat_message(&format!("/login {AUTH_PASSWORD}")),
+            compression,
+        );
+        bot.auth_sent = true;
     }
     bot.teleported = true;
     println!("{x}, {y}, {z}");
