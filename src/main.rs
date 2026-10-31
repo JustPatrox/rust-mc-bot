@@ -467,10 +467,9 @@ pub fn start_bots(
                     }
                 }
                 if bot.messages_enabled && (tick_counter + bot.id) % bot.chat_interval_ticks == 0 {
-                    bot.send_packet(
-                        play::write_chat_message(messages.choose(&mut rand::thread_rng()).unwrap()),
-                        &mut compression,
-                    );
+                    let message = messages.choose(&mut rand::thread_rng()).unwrap();
+                    bot.send_packet(play::write_chat_message(message), &mut compression);
+                    println!("{} sent chat: {}", bot.name, message);
                 }
                 if !protocol::IS_26_2 || protocol::IS_1_21_11 {
                     bot.send_packet(play::write_tick_end(), &mut compression);
